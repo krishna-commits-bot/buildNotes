@@ -92,7 +92,7 @@
 - Ensure smooth integration with main layout.
 
 ### Krishna
-- Assist Vishal in optimizing vector search queries.
+- Coordinate with Vishal in optimizing vector search queries.
 - Create DB triggers for RAG events.
 - Conduct full DB validation and test recovery from corrupt states.
 
