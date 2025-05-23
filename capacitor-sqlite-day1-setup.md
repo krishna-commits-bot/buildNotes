@@ -53,7 +53,7 @@ VALUES ('Meta', 'Frontend Engineer', 'Rejected', '2025-04-29', 'Rejection email 
 
 ---
 
-## ❓ Developer Questions & Detailed Answers (50 Questions)
+## ❓Questions & Detailed Answers
 
 ### 1. How does Capacitor handle native SQLite operations under the hood?
 
@@ -229,160 +229,363 @@ await db.execute("COMMIT;");
 
 ### 11. How to test SQL queries locally without running the full app?
 
-Use DB tools (like DB Browser for SQLite) or run in a Node.js test environment with mock data.
+You can use tools like **DB Browser for SQLite** to test queries visually or set up a **Node.js environment** with SQLite3 package and mock data to validate logic before integrating.
+
+🔧 **Node.js Example:**
+```js
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database(':memory:');
+
+db.serialize(() => {
+  db.run("CREATE TABLE jobs (id INTEGER, title TEXT)");
+  db.run("INSERT INTO jobs VALUES (1, 'Engineer')");
+  db.each("SELECT * FROM jobs", (err, row) => console.log(row));
+});
+```
+
+---
 
 ### 12. What is the best practice to separate read and write queries?
 
-Use service-layer separation and transaction management. Group reads and writes to avoid conflicts.
+Use a **service layer** pattern to isolate read (SELECT) and write (INSERT, UPDATE, DELETE) operations.
+
+✅ Benefits:
+- Prevent read-write conflicts
+- Easier caching and optimization
+- Maintain clear data flow
+
+---
 
 ### 13. Can mock data be reloaded/reset dynamically during development?
 
-Yes, through scripts that drop and re-seed tables with sample data.
+Yes. Write dev-only scripts or CLI commands that:
+- Drop tables
+- Recreate schema
+- Seed with mock data
+
+🔧 **Example:**
+```js
+await db.execute("DROP TABLE IF EXISTS jobs");
+await db.execute("CREATE TABLE jobs (id INTEGER, title TEXT)");
+await db.execute("INSERT INTO jobs (title) VALUES ('Dev'), ('QA'), ('PM')");
+```
+
+---
 
 ### 14. How large can the SQLite DB grow in a typical mobile environment?
 
-It can handle gigabytes of data, but performance degrades beyond a few hundred MBs without indexing.
+SQLite can handle databases in **GBs**, but:
+
+- Performance degrades beyond a few hundred MBs
+- Use **indexes** and **normalized schema**
+- Avoid unnecessary BLOBs
+
+📘 [SQLite Limits](https://www.sqlite.org/limits.html)
+
+---
 
 ### 15. Does SQLite support JSON or unstructured data types?
 
-Yes, via JSON1 extension, allowing storage and querying of JSON data.
+✅ Yes. Use the **JSON1 extension** to:
+- Store JSON as TEXT
+- Query JSON fields using functions like `json_extract`, `json_object`, etc.
+
+🔧 **Example:**
+```sql
+SELECT json_extract(data, '$.name') FROM users WHERE id = 1;
+```
+
+---
 
 ### 16. What indexing strategies are supported?
 
-B-tree indexing by default. Support for single, compound, and partial indexes.
+SQLite supports:
+
+- **Single-column index**
+- **Multi-column (compound) index**
+- **Partial indexes** (using WHERE clause)
+- **Unique indexes**
+
+🔧 **Example:**
+```sql
+CREATE INDEX idx_title ON jobs(title);
+CREATE UNIQUE INDEX idx_unique_email ON users(email);
+```
+
+📘 [SQLite Indexes](https://sqlite.org/lang_createindex.html)
+
+---
 
 ### 17. How do we ensure ACID compliance with Capacitor’s plugin?
 
-SQLite is ACID-compliant by design. Use transactions correctly via plugin methods.
+SQLite is **ACID-compliant by default**. To ensure compliance:
+
+- Always wrap related writes in `BEGIN TRANSACTION` and `COMMIT`
+- Rollback on error
+
+🔧 **Example:**
+```js
+await db.execute("BEGIN TRANSACTION;");
+// multiple inserts/updates
+await db.execute("COMMIT;");
+```
+
+---
 
 ### 18. What are the limitations of @capacitor-community/sqlite?
 
-Not as mature as native implementations. Some advanced SQLite features may be unsupported.
+- Some advanced SQLite features (e.g., custom collations, triggers) may not be supported
+- May require native setup for encryption or file access
+- Slightly larger bundle size
+
+📘 [Plugin Issues Tracker](https://github.com/capacitor-community/sqlite/issues)
+
+---
 
 ### 19. Are there any tools for inspecting the SQLite DB on a real device?
 
-Use Android Studio Device File Explorer or Xcode. You can also export the DB and inspect it with DB tools.
+✅ Yes:
+
+- **Android:** Use Android Studio > Device File Explorer
+- **iOS:** Use Xcode > Devices > App container download
+- **Both:** Export `.db` file via Capacitor Filesystem
+
+🔧 **DB Tools:** [DB Browser for SQLite](https://sqlitebrowser.org/), DBeaver
+
+---
 
 ### 20. How to sync SQLite DB with remote APIs?
 
-Use background sync jobs, REST APIs, and local change-tracking logic.
+Use:
+
+1. REST APIs for CRUD operations
+2. Local change tracking (timestamp or dirty flags)
+3. Background job processing (e.g., WorkManager/Background Fetch)
+4. Conflict resolution strategies
+
+🔧 **Example Sync Flow:**
+```txt
+[Local Change] → [Flag as dirty] → [Background Sync Job] → [Remote API] → [Clear Flag]
+```
 
 ### 21. What is the best way to store binary data (e.g., images) in SQLite?
+Storing binary blobs directly in SQLite is possible but not ideal for performance or scalability. The best practice is to store the file path or URI in the database and keep the binary data (like images) in the device's file system.
 
-Store file paths in the DB, not binary blobs. This reduces DB bloat.
+**Example:**
+```sql
+CREATE TABLE photos (
+    id INTEGER PRIMARY KEY,
+    title TEXT,
+    file_path TEXT
+);
+```
 
 ### 22. Are transactions supported natively in the plugin?
+Yes, the `@capacitor-community/sqlite` plugin supports transactions. Transactions allow multiple operations to be treated as a single unit of work.
 
-Yes, the plugin exposes transaction methods for batch inserts/updates.
+**Example:**
+```ts
+await db.execute('BEGIN TRANSACTION;');
+try {
+  await db.run('INSERT INTO users(name) VALUES (?)', ['Krishna']);
+  await db.run('INSERT INTO logs(action) VALUES (?)', ['user added']);
+  await db.execute('COMMIT;');
+} catch (error) {
+  await db.execute('ROLLBACK;');
+}
+```
 
 ### 23. How to handle rollback in case of failures?
-
-Use transaction blocks. If any query fails, call rollback().
+You handle rollback by wrapping your operations in a transaction. If any query fails, call `ROLLBACK` to undo changes.
 
 ### 24. How to fetch large datasets without performance hits?
+Use SQL pagination (`LIMIT` and `OFFSET`) and only fetch the fields you need. Avoid `SELECT *` for large tables.
 
-Use pagination and limit queries. Load only necessary fields.
+**Example:**
+```sql
+SELECT id, title FROM jobs ORDER BY applied_on DESC LIMIT 20 OFFSET 40;
+```
 
 ### 25. Can SQLite queries be parameterized?
+Yes, parameterized queries (prepared statements) help prevent SQL injection and improve performance.
 
-Yes, prepared statements can be used via plugin methods to avoid SQL injection.
+**Example:**
+```ts
+await db.run('SELECT * FROM users WHERE email = ?', [userEmail]);
+```
 
 ### 26. What are the best practices for structuring multiple tables?
-
-Normalize where necessary, use clear naming, index foreign keys, and design for extensibility.
+- Normalize your schema to reduce redundancy.
+- Use intuitive and consistent naming.
+- Index foreign keys and columns frequently used in WHERE clauses.
+- Design tables for expected app workflows.
 
 ### 27. How to handle nullable fields in SQLite schema?
+Declare the field without the `NOT NULL` constraint. Store `NULL` explicitly.
 
-Define fields without NOT NULL, and use NULL values explicitly.
+**Example:**
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    description TEXT,
+    due_date TEXT NULL
+);
+```
 
 ### 28. How to integrate foreign keys and cascading deletes?
+Use the `ON DELETE CASCADE` clause in foreign key definitions and ensure foreign keys are enabled:
 
-Use `ON DELETE CASCADE` and enable foreign key support using PRAGMA.
+**Example:**
+```sql
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE parent (
+    id INTEGER PRIMARY KEY
+);
+
+CREATE TABLE child (
+    id INTEGER PRIMARY KEY,
+    parent_id INTEGER,
+    FOREIGN KEY(parent_id) REFERENCES parent(id) ON DELETE CASCADE
+);
+```
 
 ### 29. Is full-text search supported in SQLite?
+Yes, SQLite provides full-text search through the FTS5 extension. It enables indexing and efficient querying of text content.
 
-Yes, using FTS5 extension, which allows full-text indexing and querying.
+**Example:**
+```sql
+CREATE VIRTUAL TABLE articles USING fts5(title, body);
+SELECT * FROM articles WHERE body MATCH 'Capacitor';
+```
 
 ### 30. How to migrate user data between app versions?
+Keep a `version` number for your schema. On app start, compare the current version with the DB version, and apply migration scripts accordingly.
 
-Version control your schema and apply migrations conditionally during app start.
+**Example:**
+```ts
+if (dbVersion < 2) {
+  await db.execute('ALTER TABLE users ADD COLUMN last_login TEXT;');
+  await setDbVersion(2);
+}
+```
 
 ### 31. Is there a limit to the number of rows or tables?
-
-SQLite supports millions of rows and thousands of tables, but performance depends on hardware.
+SQLite supports millions of rows and thousands of tables, but performance depends on device hardware and indexing strategies. Efficient indexing and careful schema design are key to scaling.
 
 ### 32. How to manage SQLite DB across different platforms (iOS/Android)?
-
-Use Capacitor plugins for platform-specific behavior. Maintain a shared schema and test both builds.
+Use the `@capacitor-community/sqlite` plugin which handles platform differences. Keep the schema consistent across platforms, and test on both to catch any discrepancies.
 
 ### 33. How to handle data conflicts during sync or updates?
-
-Use conflict resolution policies (last-write wins, merge logic, or manual review).
+Implement conflict resolution strategies such as:
+- Last-write-wins.
+- Merging based on timestamps.
+- Prompting the user to resolve conflicts manually.
 
 ### 34. Can we define triggers inside SQLite using Capacitor?
+Yes. Triggers are part of SQLite's core functionality. You can include them in schema setup scripts:
 
-Yes, SQLite supports triggers; define them in schema migration scripts.
+```sql
+CREATE TRIGGER update_timestamp
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+  UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
+```
 
 ### 35. How to encrypt sensitive data in the database?
-
-Use SQLCipher or encrypt at the application level before storing.
+Use SQLCipher for database-level encryption.  
+Alternatively, encrypt data before storing using JavaScript libraries (e.g., crypto-js).
 
 ### 36. How does the performance degrade with 100k+ rows?
+Performance may degrade due to:
+- Lack of indexes.
+- Large joins or subqueries.
 
-Without indexing, query time increases. Use indexes and optimize queries.
+Use `LIMIT`, `OFFSET`, and indexing to maintain performance.
 
 ### 37. Can we run complex JOIN queries effectively?
+Yes. SQLite supports multi-table joins. Ensure that joined fields are indexed to avoid slowdowns.
 
-Yes, SQLite handles joins well if indexes are defined properly.
+```sql
+SELECT orders.id, customers.name
+FROM orders
+JOIN customers ON orders.customer_id = customers.id;
+```
 
 ### 38. What are common pitfalls in using SQLite in mobile apps?
-
-Schema changes without migration, write-locks, DB corruption on crashes.
+- Missing migrations.
+- Write locks causing crashes.
+- DB corruption on improper app closure.
+- Lack of schema versioning.
 
 ### 39. How to implement pagination for large result sets?
+Use SQL `LIMIT` and `OFFSET`:
 
-Use LIMIT and OFFSET in queries. Cache or lazy-load results.
+```sql
+SELECT * FROM jobs LIMIT 20 OFFSET 40;
+```
+
+Implement lazy loading or infinite scrolling for better UX.
 
 ### 40. How to debug SQLite issues on real devices?
+- Export the DB file and inspect with tools like DB Browser for SQLite.
+- Enable verbose logging in app code.
+- Use Android Studio’s Device File Explorer or Xcode to pull files.
 
-Export the DB file, enable debug logs in app, use native tools for inspection.
+# Other Questions : 
 
 ### 41. How do different mobile OS versions affect SQLite behavior?
-
-SQLite is bundled with the app, so behavior is mostly consistent unless plugin API changes.
+SQLite is bundled with the app via the plugin, ensuring consistent behavior across OS versions. However, updates to the plugin or OS-level file access policies may affect behavior. Regular testing on multiple OS versions is recommended.
 
 ### 42. Can SQLite database be bundled with the app initially?
-
-Yes, pre-populate and copy DB file on first app launch.
+Yes. You can pre-populate a database and bundle it with your app. On the first app launch, copy the database to the appropriate app directory using the plugin’s import functionality.
 
 ### 43. What happens on app uninstall and reinstall?
-
-All local data, including SQLite, is deleted unless backed up externally.
+When an app is uninstalled, all local data including the SQLite database is deleted. To preserve data across reinstalls, store backups externally (e.g., cloud storage or exported files).
 
 ### 44. How to ensure cross-platform data consistency?
-
-Use shared schema, rigorous testing, and common data validation logic.
+- Use a shared database schema across all platforms.
+- Apply consistent data validation logic.
+- Perform rigorous cross-platform testing.
+- Use the same plugin version on all platforms.
 
 ### 45. Is lazy loading of data possible with SQLite?
+Yes. Implement lazy loading using:
+- `LIMIT` and `OFFSET` for paginated queries.
+- Chunked data retrieval as the user scrolls or interacts with the app.
 
-Yes, by using paginated queries or loading chunks of data on demand.
+```sql
+SELECT * FROM items LIMIT 20 OFFSET 40;
+```
 
 ### 46. How does SQLite behave in offline mode with sync capability?
-
-Works offline; sync logic must track local changes and push to server when online.
+SQLite works fully offline. To sync with a server:
+- Track local changes (e.g., timestamps or version fields).
+- Implement a queue or sync strategy to push changes when back online.
 
 ### 47. What plugin APIs are exposed for backup/restore?
-
-Capacitor plugin provides export/import and filesystem access to handle DB backup/restore.
+The `@capacitor-community/sqlite` plugin provides:
+- `exportToJson` and `importFromJson` methods.
+- File system access to export/import the `.db` file manually.
 
 ### 48. Can a corrupted DB be detected and repaired automatically?
+Detection must be handled manually using checks like:
+- `PRAGMA integrity_check;`
+- Fallback strategies and logging.
 
-Detection is manual, repair is limited. Maintain backups and implement integrity checks.
+Automatic repair is limited; always maintain regular backups for recovery.
 
 ### 49. How often should we vacuum or optimize the DB?
+Run `VACUUM`:
+- After bulk deletions.
+- Periodically in a maintenance routine.
 
-Periodically after many deletes. Use VACUUM to rebuild and optimize the DB.
+It reclaims unused space and optimizes database performance.
 
 ### 50. What are best practices for writing safe and efficient SQL in mobile apps?
-
-Use parameterized queries, proper indexing, normalized schema, and regular profiling.
+- Use **parameterized queries** to prevent SQL injection.
+- Create **indexes** on frequently queried columns.
+- Maintain a **normalized schema** to reduce redundancy.
+- Profile queries during development to detect bottlenecks.
